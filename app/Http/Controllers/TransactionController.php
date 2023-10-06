@@ -66,6 +66,14 @@ class TransactionController extends Controller
         ]);
 
         $lastest = Transaction::where('id', $trx->id - 1)->first();
+        if ($trx->description == Transaction::PENJUALAN) {
+            // check stock 
+            if ($lastest != null && $lastest->qty_balance < abs($request->qty)) {
+                return response()->json([
+                    'message' => 'stok kurang',
+                ]);
+            }
+        }
         $trx->proccess($lastest);
 
         $trx->save();
@@ -75,6 +83,7 @@ class TransactionController extends Controller
             foreach ($after as $trx) {
                 $lastest = Transaction::where('id', $trx->id - 1)->first();
                 $trx->proccess($lastest);
+                $trx->save();
             }
         }
 
@@ -83,7 +92,24 @@ class TransactionController extends Controller
         return $trx;
     }
 
-    public function destroy(Request $request)
+    public function destroy(Transaction $trx)
     {
+        DB::beginTransaction();
+
+        $trxId = $trx->id;
+        $trx->delete();
+
+        $after = Transaction::where('id', '>', $trxId)->get();
+        if ($after->count() > 0) {
+            foreach ($after as $trx) {
+                $lastest = Transaction::where('id', $trx->id - 1)->first();
+                $trx->proccess($lastest);
+                $trx->save();
+            }
+        }
+
+        DB::commit();
+
+        return response()->json(['message' => 'success'], 203);
     }
 }
